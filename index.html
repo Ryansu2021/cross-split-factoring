@@ -494,7 +494,7 @@ function check(){
     const ids=['A','B','C','D']; if(!need(ids)) return; const [A,B,C,D]=ids.map(i=>pInt(val(i)));
     if([A,B,C,D].some(v=>v===null)) return fmtErr(ids);
     const g=S.g;
-    if(A&&C&&A*C===a&&A*D+B*C===b&&B*D===c){ S.ans=[[A,B],[C,D]]; r={ok:1,msg:`${plain(poly(a,b,c))} = ${plain(bin(A,B)+bin(C,D))}`}; }
+    if(A&&C&&A*C===a&&A*D+B*C===b&&B*D===c){ S.ans=[[A,B],[C,D]]; r={ok:1,msg:'兩個括號都寫好了！可是這樣分解對不對呢？下一步自己乘開來檢查。'}; }
     else{
       const hasCommon=(A===g.u1&&B===g.v1)||(C===g.u1&&D===g.v1);
       if(hasCommon) r={misc:'M7',bad:(A===g.u1&&B===g.v1)?['C','D']:['A','B'],msg:`共同括號寫對了！提出它之後，兩組前面各剩下什麼？把剩下的合起來，寫成另一個括號。`};
