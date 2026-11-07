@@ -49,6 +49,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #F59E0B;outline-offse
 .field input{height:48px;font-size:22px;border:2px solid var(--frame);border-radius:8px;padding:0 12px;width:140px;font-family:var(--sans);color:var(--ink)}
 .field input.wide{width:520px;font-size:16px}
 details{border-top:1px dashed var(--frame);padding-top:10px;color:var(--ink2);font-size:15px}
+#teacher details{border:2px solid var(--frame);border-radius:12px;background:var(--sheet);padding:8px 16px}
+#teacher details[open]{max-height:300px;overflow:auto}
 summary{cursor:pointer;font-weight:700;color:var(--blue)}
 .small-note{font-size:14px;color:var(--ink2);line-height:1.6;margin:6px 0}
 .copyrow{display:flex;gap:8px;align-items:center;margin-top:6px}
@@ -201,15 +203,6 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
       <button class="btn primary" id="btnPwGo">登入看板</button>
       <button class="link" id="btnPwCancel">取消</button>
     </div>
-    <details id="cfg">
-      <summary>連線設定（老師）</summary>
-      <p class="small-note">已內建本 APP 專用的 Firebase 資料庫，學生作答會即時回傳到教師看板，通常不需要改。若要改用其他資料庫，填入網址後儲存；清空並儲存則恢復內建資料庫。</p>
-      <label class="field">資料庫網址<input id="inDb" class="wide" autocomplete="off" placeholder="https://你的專案-default-rtdb.asia-southeast1.firebasedatabase.app"></label>
-      <div class="row" style="margin-top:8px"><button class="btn secondary small" id="btnSaveDb">儲存設定</button><span id="dbMsg" class="small-note"></span></div>
-      <p class="small-note">學生連結（已帶入資料庫與班級代碼）：</p>
-      <div class="copyrow"><code id="stuLink"></code><button class="btn secondary small" id="btnCopy">複製</button></div>
-      <p class="small-note">資料寫在 <code>fa_cross/班級代碼/students</code>。內建資料庫只允許學生寫入自己的紀錄，讀取與清除需要教師密碼登入。</p>
-    </details>
   </div>
 </section>
 
@@ -250,6 +243,15 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
     <button class="btn secondary small" id="btnBack">返回</button>
     <button class="btn secondary small" id="btnTLogout">登出</button>
   </header>
+  <details id="cfg">
+    <summary>連線設定與學生連結</summary>
+    <p class="small-note">已內建本 APP 專用的 Firebase 資料庫，學生作答會即時回傳到教師看板，通常不需要改。若要改用其他資料庫，填入網址後儲存；清空並儲存則恢復內建資料庫。</p>
+    <label class="field">資料庫網址<input id="inDb" class="wide" autocomplete="off" placeholder="https://你的專案-default-rtdb.asia-southeast1.firebasedatabase.app"></label>
+    <div class="row" style="margin-top:8px"><button class="btn secondary small" id="btnSaveDb">儲存設定</button><span id="dbMsg" class="small-note"></span></div>
+    <p class="small-note">學生連結（已帶入本班班級代碼）：</p>
+    <div class="copyrow"><code id="stuLink"></code><button class="btn secondary small" id="btnCopy">複製</button></div>
+    <p class="small-note">資料寫在 <code>fa_cross/班級代碼/students</code>。內建資料庫只允許學生寫入自己的紀錄，讀取與清除需要教師密碼登入。</p>
+  </details>
   <div class="kpis" id="kpis"></div>
   <div class="cards" id="cards"></div>
 </section>
@@ -833,7 +835,7 @@ async function clearClass(){
 function show(id){['login','student','teacher'].forEach(v=>$('#'+v).hidden=v!==id);}
 function stuLink(){
   const u=new URL(location.href); u.search=''; const db=dbUrl(); const p=new URLSearchParams();
-  if(db)p.set('db',db); p.set('room',$('#inRoom').value.trim()||'801'); u.search=p.toString(); return u.toString();
+  if(db&&db!==FIREBASE_DB_URL.replace(/\/+$/,''))p.set('db',db); p.set('room',($('#tRoom').value||$('#inRoom').value).trim()||'801'); u.search=p.toString(); return u.toString();
 }
 function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLink(); }
 
@@ -856,27 +858,30 @@ function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLi
   $('#inSeat').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btnStart').click();});
   const note=(msg,ok)=>{const el=$('#loginErr');el.textContent=msg||'';el.style.color=ok?'var(--ok)':'';};
   const roomNow=()=>$('#inRoom').value.trim()||'801';
-  const openTeacher=()=>{$('#tRoom').value=roomNow();show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
+  const openTeacher=()=>{$('#tRoom').value=roomNow();refreshCfg();show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
   const teacherUrl=()=>{const u=new URL(location.href);const p=new URLSearchParams(location.search);p.set('view','teacher');p.set('room',roomNow());u.search=p.toString();u.hash='';return u.toString();};
-  // 在新視窗開教師看板；被瀏覽器擋下時改在本視窗開
-  const launchTeacher=(w)=>{ if(w&&!w.closed){ try{w.location.href=teacherUrl();w.focus();note('教師看板已在新視窗開啟，這個視窗可以繼續操作學生畫面。',true);return;}catch(e){} } openTeacher(); };
+  // 本視窗內開看板（教師看板視窗本身，或瀏覽器擋下新視窗時）
+  const teacherHere=()=>{ if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; $('#inPw').focus(); } };
+  // 按「教師看板」立刻開新視窗（點擊當下直接開目標網址，不會被擋）；密碼在新視窗輸入
   $('#btnTeacher').onclick=()=>{ note('');
-    if(!needAuth()||AUTH){ if(IS_TW) openTeacher(); else launchTeacher(window.open('about:blank','facross_teacher')); }
-    else { $('#pwRow').hidden=false; $('#inPw').focus(); } };
+    if(IS_TW) return teacherHere();
+    let w=null; try{ w=window.open(teacherUrl(),'facross_teacher'); }catch(e){}
+    if(w){ try{w.focus();}catch(e){} note(AUTH?'教師看板已在新視窗開啟。':'教師看板已在新視窗開啟，請在新視窗輸入教師密碼。',true); }
+    else { note('瀏覽器沒有開出新視窗，改在這個視窗登入看板。'); teacherHere(); } };
   const pwGo=async()=>{ const pw=$('#inPw').value; if(!pw){note('請輸入教師密碼。');return;}
-    const w=IS_TW?null:window.open('about:blank','facross_teacher');   // 先在點擊當下開視窗，避免被擋
     $('#btnPwGo').disabled=true; note('');
-    try{ await signIn(pw); $('#inPw').value=''; $('#pwRow').hidden=true; if(IS_TW) openTeacher(); else launchTeacher(w); }
-    catch(e){ if(w&&!w.closed) w.close(); note(authMsg(e.message)); }
+    try{ await signIn(pw); $('#inPw').value=''; $('#pwRow').hidden=true; note(''); openTeacher(); }
+    catch(e){ note(authMsg(e.message)); }
     $('#btnPwGo').disabled=false; };
   if(IS_TW){ document.title='教師看板・首尾相乘拆項分組'; $('#btnBack').textContent='關閉視窗';
-    if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; note('請輸入教師密碼登入看板。',true); } }
+    $('#btnStart').hidden=true; $('#btnTeacher').hidden=true; document.querySelectorAll('#login .row .field').forEach(f=>{ if(!f.querySelector('#inRoom')&&!f.querySelector('#inPw')) f.hidden=true; });
+    if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; note('教師看板：請輸入教師密碼。',true); setTimeout(()=>$('#inPw').focus(),50); } }
   $('#btnPwGo').onclick=pwGo;
   $('#inPw').addEventListener('keydown',e=>{if(e.key==='Enter')pwGo();});
   $('#btnPwCancel').onclick=()=>{$('#inPw').value='';$('#pwRow').hidden=true;$('#loginErr').textContent='';};
   $('#btnTLogout').onclick=()=>teacherLogout('已登出教師看板。');
   $('#btnBack').onclick=()=>{clearInterval(tTimer); if(IS_TW&&window.opener){window.close();return;} show('login');};
-  $('#tRoom').addEventListener('change',loadClass);
+  $('#tRoom').addEventListener('change',()=>{loadClass();refreshCfg();});
   $('#btnDemo').onclick=()=>{demoMode=!demoMode;if(!demoMode)DEMO=null;$('#btnDemo').textContent=demoMode?'關閉範例資料':'載入範例資料';loadClass();};
   $('#btnCsv').onclick=exportCsv;
   $('#btnClear').onclick=clearClass;
