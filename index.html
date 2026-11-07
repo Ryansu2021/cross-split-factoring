@@ -175,6 +175,11 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
       <button class="btn primary" id="btnStart">開始學習</button>
       <button class="btn secondary" id="btnTeacher">教師看板</button>
     </div>
+    <div class="row" id="pwRow" hidden>
+      <label class="field">教師密碼<input id="inPw" type="password" autocomplete="current-password" style="width:260px"></label>
+      <button class="btn primary" id="btnPwGo">登入看板</button>
+      <button class="link" id="btnPwCancel">取消</button>
+    </div>
     <details id="cfg">
       <summary>連線設定（老師）</summary>
       <p class="small-note">已內建本 APP 專用的 Firebase 資料庫，學生作答會即時回傳到教師看板，通常不需要改。若要改用其他資料庫，填入網址後儲存；清空並儲存則恢復內建資料庫。</p>
@@ -182,7 +187,7 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
       <div class="row" style="margin-top:8px"><button class="btn secondary small" id="btnSaveDb">儲存設定</button><span id="dbMsg" class="small-note"></span></div>
       <p class="small-note">學生連結（已帶入資料庫與班級代碼）：</p>
       <div class="copyrow"><code id="stuLink"></code><button class="btn secondary small" id="btnCopy">複製</button></div>
-      <p class="small-note">資料會寫在 <code>fa_cross/班級代碼/students</code>，資料庫規則需允許此路徑讀寫。</p>
+      <p class="small-note">資料寫在 <code>fa_cross/班級代碼/students</code>。內建資料庫只允許學生寫入自己的紀錄，讀取與清除需要教師密碼登入。</p>
     </details>
   </div>
 </section>
@@ -221,6 +226,7 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
     <button class="btn secondary small" id="btnCsv">匯出 CSV</button>
     <button class="btn secondary small" id="btnClear">清除本班資料</button>
     <button class="btn secondary small" id="btnBack">返回</button>
+    <button class="btn secondary small" id="btnTLogout">登出</button>
   </header>
   <div class="kpis" id="kpis"></div>
   <div class="cards" id="cards"></div>
@@ -231,6 +237,8 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
 <script>
 /* ================= 設定 ================= */
 const FIREBASE_DB_URL = "https://cross-split-factoring-default-rtdb.asia-southeast1.firebasedatabase.app";   // 部署時可直接填入；也可在登入頁「連線設定」或網址 ?db= 指定
+const FB_API_KEY = "AIzaSyCbB25e8Vhgohio1Wj1E5YLsHhk6K7syiw";   // Firebase 網頁 API 金鑰（公開識別碼，非密碼）
+const TEACHER_EMAIL = "teacher@cross-split-factoring.firebaseapp.com"; // 教師帳號（Firebase Authentication）
 const IDLE_MS = 3*60*1000, ACTIVE_MS = 2*60*1000;
 const STEP_NAMES = ['首尾相乘','找兩數','拆中間項','分組提公因式','提出共同括號','乘開檢查','回頭看'];
 const MODE_NAMES = {example:'例題',swap:'換順序挑戰',practice:'隨機練習'};
@@ -574,6 +582,35 @@ async function doPost(){
   }catch(e){ conn.className='conn bad'; conn.textContent='回傳失敗，下次作答會再試'; }
 }
 
+/* ================= 教師登入（Firebase Authentication） ================= */
+let AUTH=null;
+try{AUTH=JSON.parse(sessionStorage.getItem('facross_auth')||'null');}catch(e){}
+function saveAuth(){try{AUTH?sessionStorage.setItem('facross_auth',JSON.stringify(AUTH)):sessionStorage.removeItem('facross_auth');}catch(e){}}
+const needAuth=()=>dbUrl()===FIREBASE_DB_URL.replace(/\/+$/,'');
+async function signIn(pw){
+  const r=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_API_KEY}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:TEACHER_EMAIL,password:pw,returnSecureToken:true})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error((j.error&&j.error.message)||'ERR');
+  AUTH={idToken:j.idToken,refreshToken:j.refreshToken,exp:Date.now()+(+j.expiresIn-120)*1000}; saveAuth();
+}
+async function getToken(){
+  if(!AUTH) return null;
+  if(Date.now()<AUTH.exp) return AUTH.idToken;
+  try{
+    const r=await fetch(`https://securetoken.googleapis.com/v1/token?key=${FB_API_KEY}`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(AUTH.refreshToken)});
+    const j=await r.json(); if(!r.ok) throw 0;
+    AUTH={idToken:j.id_token,refreshToken:j.refresh_token,exp:Date.now()+(+j.expires_in-120)*1000}; saveAuth(); return AUTH.idToken;
+  }catch(e){ AUTH=null; saveAuth(); return null; }
+}
+function authMsg(code){
+  if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/.test(code)) return '密碼不正確。';
+  if(/TOO_MANY_ATTEMPTS/.test(code)) return '嘗試太多次，請稍後再試。';
+  if(/USER_DISABLED/.test(code)) return '教師帳號已停用。';
+  return '無法登入，請確認網路連線。';
+}
+function teacherLogout(msg){ AUTH=null; saveAuth(); clearInterval(tTimer); show('login'); $('#loginErr').textContent=msg||''; }
+async function authQ(){ if(!needAuth()) return ''; const t=await getToken(); return t?'?auth='+encodeURIComponent(t):null; }
+
 /* ================= 教師看板 ================= */
 let tTimer=null, demoMode=false, lastList=[], clearArm=false;
 async function loadClass(){
@@ -582,7 +619,8 @@ async function loadClass(){
   if(demoMode){ obj=demoData(); conn.className='conn'; conn.textContent='範例資料'; }
   else if(!db){ try{obj=JSON.parse(store(LKEY(room))||'{}');}catch(e){} conn.className='conn'; conn.textContent='本機模式'; }
   else{
-    try{const res=await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`);if(!res.ok)throw 0;obj=(await res.json())||{};conn.className='conn ok';conn.textContent='已連線・每 3 秒更新';}
+    const q=await authQ(); if(q===null){teacherLogout('登入已過期，請重新輸入教師密碼。');return;}
+    try{const res=await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`+q);if(res.status===401){teacherLogout('沒有讀取權限，請重新輸入教師密碼。');return;}if(!res.ok)throw 0;obj=(await res.json())||{};conn.className='conn ok';conn.textContent='已連線・每 3 秒更新';}
     catch(e){conn.className='conn bad';conn.textContent='讀取失敗，請檢查資料庫網址';obj=null;}
   }
   if(obj===null) return;
@@ -650,7 +688,7 @@ async function clearClass(){
   const room=$('#tRoom').value.trim()||'801', db=dbUrl();
   if(demoMode){demoMode=false;DEMO=null;$('#btnDemo').textContent='載入範例資料';}
   else if(!db) store(LKEY(room),'{}');
-  else{ try{await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`,{method:'DELETE'});}catch(e){} }
+  else{ try{const q=await authQ(); if(q!==null) await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`+q,{method:'DELETE'});}catch(e){} }
   loadClass();
 }
 
@@ -679,7 +717,17 @@ function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLi
     show('student'); newRound('example');
   };
   $('#inSeat').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btnStart').click();});
-  $('#btnTeacher').onclick=()=>{$('#tRoom').value=$('#inRoom').value.trim()||'801';show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
+  const openTeacher=()=>{$('#tRoom').value=$('#inRoom').value.trim()||'801';show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
+  $('#btnTeacher').onclick=()=>{ $('#loginErr').textContent=''; if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; $('#inPw').focus(); } };
+  const pwGo=async()=>{ const pw=$('#inPw').value; if(!pw){$('#loginErr').textContent='請輸入教師密碼。';return;}
+    $('#btnPwGo').disabled=true; $('#loginErr').textContent='';
+    try{ await signIn(pw); $('#inPw').value=''; $('#pwRow').hidden=true; openTeacher(); }
+    catch(e){ $('#loginErr').textContent=authMsg(e.message); }
+    $('#btnPwGo').disabled=false; };
+  $('#btnPwGo').onclick=pwGo;
+  $('#inPw').addEventListener('keydown',e=>{if(e.key==='Enter')pwGo();});
+  $('#btnPwCancel').onclick=()=>{$('#inPw').value='';$('#pwRow').hidden=true;$('#loginErr').textContent='';};
+  $('#btnTLogout').onclick=()=>teacherLogout('已登出教師看板。');
   $('#btnBack').onclick=()=>{clearInterval(tTimer);show('login');};
   $('#tRoom').addEventListener('change',loadClass);
   $('#btnDemo').onclick=()=>{demoMode=!demoMode;if(!demoMode)DEMO=null;$('#btnDemo').textContent=demoMode?'關閉範例資料':'載入範例資料';loadClass();};
