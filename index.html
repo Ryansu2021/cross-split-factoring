@@ -718,8 +718,10 @@ async function doPost(){
 
 /* ================= 教師登入（Firebase Authentication） ================= */
 let AUTH=null;
-try{AUTH=JSON.parse(sessionStorage.getItem('facross_auth')||'null');}catch(e){}
-function saveAuth(){try{AUTH?sessionStorage.setItem('facross_auth',JSON.stringify(AUTH)):sessionStorage.removeItem('facross_auth');}catch(e){}}
+// 存在 localStorage，讓新開的教師看板視窗也能沿用登入狀態；按「登出」即清除
+try{AUTH=JSON.parse(localStorage.getItem('facross_auth')||'null');}catch(e){}
+function saveAuth(){try{AUTH?localStorage.setItem('facross_auth',JSON.stringify(AUTH)):localStorage.removeItem('facross_auth');}catch(e){}}
+const IS_TW=new URLSearchParams(location.search).get('view')==='teacher';  // 這個視窗是教師看板專用視窗
 const needAuth=()=>dbUrl()===FIREBASE_DB_URL.replace(/\/+$/,'');
 async function signIn(pw){
   const r=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_API_KEY}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:TEACHER_EMAIL,password:pw,returnSecureToken:true})});
@@ -852,18 +854,28 @@ function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLi
     show('student'); newRound('example');
   };
   $('#inSeat').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btnStart').click();});
-  const openTeacher=()=>{$('#tRoom').value=$('#inRoom').value.trim()||'801';show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
-  $('#btnTeacher').onclick=()=>{ $('#loginErr').textContent=''; if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; $('#inPw').focus(); } };
-  const pwGo=async()=>{ const pw=$('#inPw').value; if(!pw){$('#loginErr').textContent='請輸入教師密碼。';return;}
-    $('#btnPwGo').disabled=true; $('#loginErr').textContent='';
-    try{ await signIn(pw); $('#inPw').value=''; $('#pwRow').hidden=true; openTeacher(); }
-    catch(e){ $('#loginErr').textContent=authMsg(e.message); }
+  const note=(msg,ok)=>{const el=$('#loginErr');el.textContent=msg||'';el.style.color=ok?'var(--ok)':'';};
+  const roomNow=()=>$('#inRoom').value.trim()||'801';
+  const openTeacher=()=>{$('#tRoom').value=roomNow();show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
+  const teacherUrl=()=>{const u=new URL(location.href);const p=new URLSearchParams(location.search);p.set('view','teacher');p.set('room',roomNow());u.search=p.toString();u.hash='';return u.toString();};
+  // 在新視窗開教師看板；被瀏覽器擋下時改在本視窗開
+  const launchTeacher=(w)=>{ if(w&&!w.closed){ try{w.location.href=teacherUrl();w.focus();note('教師看板已在新視窗開啟，這個視窗可以繼續操作學生畫面。',true);return;}catch(e){} } openTeacher(); };
+  $('#btnTeacher').onclick=()=>{ note('');
+    if(!needAuth()||AUTH){ if(IS_TW) openTeacher(); else launchTeacher(window.open('about:blank','facross_teacher')); }
+    else { $('#pwRow').hidden=false; $('#inPw').focus(); } };
+  const pwGo=async()=>{ const pw=$('#inPw').value; if(!pw){note('請輸入教師密碼。');return;}
+    const w=IS_TW?null:window.open('about:blank','facross_teacher');   // 先在點擊當下開視窗，避免被擋
+    $('#btnPwGo').disabled=true; note('');
+    try{ await signIn(pw); $('#inPw').value=''; $('#pwRow').hidden=true; if(IS_TW) openTeacher(); else launchTeacher(w); }
+    catch(e){ if(w&&!w.closed) w.close(); note(authMsg(e.message)); }
     $('#btnPwGo').disabled=false; };
+  if(IS_TW){ document.title='教師看板・首尾相乘拆項分組'; $('#btnBack').textContent='關閉視窗';
+    if(!needAuth()||AUTH) openTeacher(); else { $('#pwRow').hidden=false; note('請輸入教師密碼登入看板。',true); } }
   $('#btnPwGo').onclick=pwGo;
   $('#inPw').addEventListener('keydown',e=>{if(e.key==='Enter')pwGo();});
   $('#btnPwCancel').onclick=()=>{$('#inPw').value='';$('#pwRow').hidden=true;$('#loginErr').textContent='';};
   $('#btnTLogout').onclick=()=>teacherLogout('已登出教師看板。');
-  $('#btnBack').onclick=()=>{clearInterval(tTimer);show('login');};
+  $('#btnBack').onclick=()=>{clearInterval(tTimer); if(IS_TW&&window.opener){window.close();return;} show('login');};
   $('#tRoom').addEventListener('change',loadClass);
   $('#btnDemo').onclick=()=>{demoMode=!demoMode;if(!demoMode)DEMO=null;$('#btnDemo').textContent=demoMode?'關閉範例資料':'載入範例資料';loadClass();};
   $('#btnCsv').onclick=exportCsv;
