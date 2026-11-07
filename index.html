@@ -81,6 +81,7 @@ summary{cursor:pointer;font-weight:700;color:var(--blue)}
 .lines.compact{gap:8px;padding-top:14px}
 .lines.compact .ln{font-size:32px;line-height:1.35}
 .lines.compact .ln.l0{font-size:36px}
+.cover{font-size:22px;line-height:1.6;color:var(--ink2);border:2px dashed var(--frame);border-radius:10px;padding:18px 20px;background:repeating-linear-gradient(45deg,#F8FAFC 0 10px,#EEF2F7 10px 20px)}
 .ln .eq{display:inline-block;width:46px;color:var(--ink2)}
 .ln.l0{font-size:46px;font-weight:500}
 .ln.cur{background:var(--blue-soft);border-radius:10px;margin:0 -12px;padding:4px 12px}
@@ -365,15 +366,21 @@ function render(){
     if(st===5) L+=`<div class="ln cur"><span class="eq">=</span>(${blank('A','sm')}${X()}&nbsp;${blank('B','sm')})(${blank('C','sm')}${X()}&nbsp;${blank('D','sm')})</div>`;
     else{ const [[A,B],[C,D]]=S.ans; L+=`<div class="ln"><span class="eq">=</span>${bin(A,B)}${bin(C,D)}</div>`; }
   }
+  if(st===6){ // 乘開檢查：先遮住原式與前面的推導，避免照抄係數
+    const [[A,B],[C,D]]=S.ans;
+    L=`<div class="cover">原式和前面的算式先遮起來了。<br>自己乘開，按「檢查」後再打開來對照。</div><div class="ln"><span class="eq">=</span>${bin(A,B)}${bin(C,D)}</div>`;
+  }
   $('#lines').innerHTML=L; $('#lines').classList.toggle('compact',S.done);
 
   // 草稿
   let N='';
   if(st>=7){ N+=`<div class="note done">首尾相乘 ${num(S.ac)}；拆成 ${num(S.found[0])} 和 ${num(S.found[1])}</div>`+crossHtml(); $('#notes').innerHTML=N; }
   else{
-  if(st===1) N+=`<div class="note cur"><span class="nl">首尾相乘</span>首項係數 × 常數項 = ${blank('ac','sm')}</div>`;
+  if(st===6) N+=`<div class="note done cover-note">首尾相乘、找兩數的草稿先遮住</div>`;
+  else if(st===1) N+=`<div class="note cur"><span class="nl">首尾相乘</span>首項係數 × 常數項 = ${blank('ac','sm')}</div>`;
   else N+=`<div class="note done">首尾相乘：${a} × ${paren(c)} = ${num(S.ac)}</div>`;
-  if(st===2) N+=`<div class="note cur"><span class="nl">找兩數</span>相乘 = ${num(S.ac)}，相加 = ${num(b)}<div class="nrow">這兩數是 ${blank('p1','sm')} 和 ${blank('p2','sm')}</div></div>`;
+  if(st===6){}
+  else if(st===2) N+=`<div class="note cur"><span class="nl">找兩數</span>相乘 = ${num(S.ac)}，相加 = ${num(b)}<div class="nrow">這兩數是 ${blank('p1','sm')} 和 ${blank('p2','sm')}</div></div>`;
   else if(st>2) N+=`<div class="note done">相乘 ${num(S.ac)}、相加 ${num(b)} → ${num(S.found[0])} 和 ${num(S.found[1])}</div>`;
   if(st>=6){
     const [[A,B],[C,D]]=S.ans;
