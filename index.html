@@ -177,7 +177,7 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
     </div>
     <details id="cfg">
       <summary>連線設定（老師）</summary>
-      <p class="small-note">填入 Firebase Realtime Database 網址，學生作答就會即時回傳到教師看板。沒填時是本機模式：只有同一台電腦、同一個瀏覽器的看板看得到。</p>
+      <p class="small-note">已內建本 APP 專用的 Firebase 資料庫，學生作答會即時回傳到教師看板，通常不需要改。若要改用其他資料庫，填入網址後儲存；清空並儲存則恢復內建資料庫。</p>
       <label class="field">資料庫網址<input id="inDb" class="wide" autocomplete="off" placeholder="https://你的專案-default-rtdb.asia-southeast1.firebasedatabase.app"></label>
       <div class="row" style="margin-top:8px"><button class="btn secondary small" id="btnSaveDb">儲存設定</button><span id="dbMsg" class="small-note"></span></div>
       <p class="small-note">學生連結（已帶入資料庫與班級代碼）：</p>
@@ -230,7 +230,7 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
 
 <script>
 /* ================= 設定 ================= */
-const FIREBASE_DB_URL = "";   // 部署時可直接填入；也可在登入頁「連線設定」或網址 ?db= 指定
+const FIREBASE_DB_URL = "https://cross-split-factoring-default-rtdb.asia-southeast1.firebasedatabase.app";   // 部署時可直接填入；也可在登入頁「連線設定」或網址 ?db= 指定
 const IDLE_MS = 3*60*1000, ACTIVE_MS = 2*60*1000;
 const STEP_NAMES = ['首尾相乘','找兩數','拆中間項','分組提公因式','提出共同括號','乘開檢查','回頭看'];
 const MODE_NAMES = {example:'例題',swap:'換順序挑戰',practice:'隨機練習'};
@@ -666,7 +666,7 @@ function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLi
   const q=new URLSearchParams(location.search); if(q.get('room')) $('#inRoom').value=q.get('room');
   refreshCfg();
   $('#inRoom').addEventListener('input',refreshCfg);
-  $('#btnSaveDb').onclick=()=>{const v=$('#inDb').value.trim();store('facross_db',v);$('#dbMsg').textContent=v?'已儲存（此瀏覽器）':'已清除，改用本機模式';refreshCfg();};
+  $('#btnSaveDb').onclick=()=>{const v=$('#inDb').value.trim();store('facross_db',v);$('#dbMsg').textContent=v?'已儲存（此瀏覽器）':'已清除，改用內建資料庫';refreshCfg();};
   $('#btnCopy').onclick=async()=>{const t=$('#stuLink').textContent;try{await navigator.clipboard.writeText(t);$('#btnCopy').textContent='已複製';}catch(e){const r=document.createRange();r.selectNodeContents($('#stuLink'));const s=getSelection();s.removeAllRanges();s.addRange(r);$('#btnCopy').textContent='已選取，請按複製';}setTimeout(()=>$('#btnCopy').textContent='複製',2000);};
   $('#btnStart').onclick=()=>{
     const seat=norm($('#inSeat').value), room=$('#inRoom').value.trim();
