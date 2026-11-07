@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<title>首尾相乘拆項分組</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* 方格筆記風：16:9 固定舞台（1280×720）自動縮放；上方題目列／中央板書＋草稿／下方引導區 */
+:root{
+  --paper:#FBFCFE; --grid:#E3E9F2; --frame:#CBD5E1; --ink:#1F2937; --ink2:#475569;
+  --blue:#1D4ED8; --blue-soft:#EFF4FF; --accent:#C2410C; --sheet:#FFFFFF;
+  --ok:#15803D; --ok-bg:#F0FDF4; --bad:#B91C1C; --bad-bg:#FEF2F2; --hint-bg:#FFF7ED;
+  --g1:#1D4ED8; --g2:#C2410C;
+  --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  --math:"Cambria Math","Times New Roman",Times,serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden}
+#vp{position:fixed;inset:0;background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px}
+#stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center center;display:flex;flex-direction:column}
+.view{width:100%;height:100%;display:flex;flex-direction:column;gap:12px;padding:14px 18px;box-sizing:border-box}
+button{font-family:var(--sans);cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid #F59E0B;outline-offset:2px}
+.btn{min-height:52px;padding:0 24px;border-radius:10px;font-size:20px;font-weight:700;border:2px solid var(--blue)}
+.btn.primary{background:var(--blue);color:#fff}
+.btn.secondary{background:#fff;color:var(--blue)}
+.btn.small{min-height:40px;font-size:16px;padding:0 14px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.link{background:none;border:none;color:var(--blue);font-size:15px;text-decoration:underline;padding:4px;justify-self:end}
+.panel{background:var(--sheet);border:2px solid var(--frame);border-radius:12px}
+
+/* ---------- 登入 ---------- */
+#login{align-items:center;justify-content:center}
+.login-card{width:620px;padding:30px 36px;display:flex;flex-direction:column;gap:16px}
+.login-card h1{margin:0;font-size:34px;font-weight:900;letter-spacing:.02em}
+.login-card .sub{margin:0;color:var(--ink2);font-size:18px}
+.login-card .sample{font-family:var(--math);font-size:26px;color:var(--ink)}
+.row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:6px;font-size:16px;color:var(--ink2);font-weight:500}
+.field input{height:48px;font-size:22px;border:2px solid var(--frame);border-radius:8px;padding:0 12px;width:140px;font-family:var(--sans);color:var(--ink)}
+.field input.wide{width:520px;font-size:16px}
+details{border-top:1px dashed var(--frame);padding-top:10px;color:var(--ink2);font-size:15px}
+summary{cursor:pointer;font-weight:700;color:var(--blue)}
+.small-note{font-size:14px;color:var(--ink2);line-height:1.6;margin:6px 0}
+.copyrow{display:flex;gap:8px;align-items:center;margin-top:6px}
+.copyrow code{flex:1;min-width:0;font-size:13px;background:var(--blue-soft);padding:8px;border-radius:6px;word-break:break-all;color:var(--ink)}
+.err{color:var(--bad);font-size:16px;min-height:22px;font-weight:700}
+
+/* ---------- 學生：上方題目列 ---------- */
+.top{display:flex;align-items:center;gap:14px;height:64px;padding:0 12px}
+.brand{display:flex}
+.modes{display:flex;gap:6px}
+.modes button{white-space:nowrap;height:38px;padding:0 10px;border-radius:8px;border:2px solid var(--frame);background:#fff;color:var(--ink2);font-size:15px;font-weight:700}
+.modes button[aria-pressed="true"]{border-color:var(--blue);background:var(--blue);color:#fff}
+.chips{flex:1;display:flex;gap:6px;list-style:none;margin:0;padding:0;justify-content:center}
+.chips li{display:flex;align-items:center;gap:5px;height:36px;padding:0 9px;border-radius:18px;font-size:14px;color:var(--ink2);border:2px solid var(--frame);background:#fff;white-space:nowrap}
+.chips li .n{font-weight:900}
+.chips li.done{border-color:var(--ok);color:var(--ok)}
+.chips li.cur{border-color:var(--blue);background:var(--blue);color:#fff;font-weight:700}
+.me{display:grid;grid-template-columns:auto auto;align-items:center;column-gap:8px;row-gap:2px;font-size:13px;color:var(--ink2);white-space:nowrap}
+.me #meSeat{font-weight:900;color:var(--ink);font-size:18px}
+.conn:empty{display:none}
+.conn{font-size:13px;padding:3px 8px;border-radius:10px;border:1px solid var(--frame)}
+.conn.ok{color:var(--ok);border-color:var(--ok)}
+.conn.bad{color:var(--bad);border-color:var(--bad)}
+
+/* ---------- 學生：中央板書 ---------- */
+.board{flex:1;display:grid;grid-template-columns:1fr 430px;min-height:0;overflow:hidden}
+.lines{padding:22px 30px;display:flex;flex-direction:column;gap:18px;min-width:0;overflow:auto}
+.ln{font-size:40px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ln input,.note input{vertical-align:middle;margin:0 2px}
+.lines.compact{gap:8px;padding-top:14px}
+.lines.compact .ln{font-size:32px;line-height:1.35}
+.lines.compact .ln.l0{font-size:36px}
+.ln .eq{display:inline-block;width:46px;color:var(--ink2)}
+.ln.l0{font-size:46px;font-weight:500}
+.ln.cur{background:var(--blue-soft);border-radius:10px;margin:0 -12px;padding:4px 12px}
+i.v{font-family:var(--math);font-style:italic;font-size:1.08em;padding:0 .04em}
+sup{font-size:.6em}
+.hl{border:3px solid var(--accent);border-radius:999px;padding:0 .18em}
+.u1{border-bottom:5px solid var(--g1);padding-bottom:2px}
+.u2{border-bottom:5px solid var(--g2);padding-bottom:2px}
+.grp{display:inline-block;padding-bottom:4px}
+.grp.g1{border-bottom:5px solid var(--g1)}
+.grp.g2{border-bottom:5px solid var(--g2)}
+input.blank{width:76px;height:54px;font-size:32px;text-align:center;font-family:var(--sans);font-weight:700;color:var(--ink);
+  border:2px dashed var(--blue);border-radius:8px;background:#fff;padding:0;box-sizing:border-box}
+input.blank.sm{width:64px;height:44px;font-size:24px}
+input.blank.mono{width:92px}
+input.blank:not(:placeholder-shown){border-style:solid}
+input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
+.draft{border-left:2px dashed var(--frame);padding:16px 18px;display:flex;flex-direction:column;gap:10px;overflow:auto;background:var(--sheet)}
+.draft h3{margin:0;font-size:15px;color:var(--ink2);letter-spacing:.2em}
+.note{font-size:21px;line-height:1.6;padding:8px 10px;border-radius:8px;border:1px solid var(--frame)}
+.note .nrow{margin-top:4px}
+.note.cur{border:2px solid var(--blue);background:var(--blue-soft)}
+.note .nl{display:block;font-size:15px;font-weight:700;color:var(--ink2)}
+.note.done{color:var(--ink2);font-size:18px}
+.note.done .nl{display:none}
+.cross{display:flex;flex-direction:column;gap:6px}
+.cross svg{width:100%;height:auto}
+.cross .crow{display:flex;align-items:center;gap:6px;font-size:19px}
+.concept{border:2px solid var(--ok);background:var(--ok-bg);border-radius:8px;padding:10px 12px;font-size:17px;line-height:1.6;color:var(--ink)}
+.concept b{color:var(--ok)}
+
+/* ---------- 學生：下方引導區 ---------- */
+.guide{height:128px;display:flex;gap:16px;align-items:center;padding:0 18px}
+.gtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.instr{font-size:21px;font-weight:700;line-height:1.4}
+.instr .step{color:var(--blue)}
+.fb{font-size:18px;line-height:1.45;min-height:26px;border-radius:8px;padding:6px 10px}
+.fb:empty{padding:0}
+.fb.ok{background:var(--ok-bg);color:var(--ok);font-weight:700}
+.fb.bad{background:var(--bad-bg);color:var(--bad)}
+.fb.hint{background:var(--hint-bg);color:#7C2D12}
+.fb.info{background:var(--blue-soft);color:var(--blue)}
+.gbtns{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;max-width:520px}
+
+/* ---------- 教師看板 ---------- */
+.ttop{display:flex;align-items:center;gap:14px;height:56px;padding:0 16px}
+.ttop h2{margin:0;font-size:22px;font-weight:900}
+.ttop .room{display:flex;align-items:center;gap:6px;font-size:15px;color:var(--ink2)}
+.ttop .room input{width:90px;height:36px;font-size:18px;border:2px solid var(--frame);border-radius:8px;padding:0 8px}
+.ttop .sp{flex:1}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+.kpi .k{font-size:14px;color:var(--ink2);font-weight:700;letter-spacing:.06em}
+.kpi .v{font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .s{font-size:14px;color:var(--ink2)}
+.kpi .v.txt{font-size:21px;line-height:1.3}
+.cards{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-content:start;padding:2px}
+.card{background:var(--sheet);border:2px solid var(--frame);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;font-size:14px;color:var(--ink2)}
+.card .h{display:flex;align-items:baseline;gap:8px}
+.card .seat{font-size:22px;font-weight:900;color:var(--ink)}
+.card .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.card .rate{font-size:20px;font-weight:900;color:var(--ink);font-variant-numeric:tabular-nums}
+.card .pos{color:var(--ink);font-weight:500}
+.bar{height:8px;background:var(--grid);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue)}
+.card .cnt{display:flex;gap:10px;font-variant-numeric:tabular-nums}
+.card .mis{min-height:20px}
+.card .flag{font-size:13px;font-weight:900;padding:1px 8px;border-radius:8px}
+.card.alert{border:4px solid var(--bad)}
+.card.alert .flag{background:var(--bad);color:#fff}
+.card.idle{border-style:dashed;border-color:var(--ink2)}
+.card.idle .flag{border:1px dashed var(--ink2);color:var(--ink2)}
+.card.demo .nm::after{content:"（範例）";color:var(--ink2)}
+.empty{grid-column:1/-1;padding:40px;text-align:center;font-size:18px;color:var(--ink2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="vp"><div id="stage">
+
+<!-- 登入 -->
+<section id="login" class="view">
+  <div class="login-card panel">
+    <h1>首尾相乘・拆項分組</h1>
+    <p class="sub">首項係數不是 1 的十字交乘因式分解，例如 <span class="sample">6<i class="v">x</i><sup>2</sup> + 7<i class="v">x</i> − 3</span></p>
+    <div class="row">
+      <label class="field">班級代碼<input id="inRoom" autocomplete="off" value="801"></label>
+      <label class="field">座號<input id="inSeat" inputmode="numeric" autocomplete="off" placeholder="例 8"></label>
+      <label class="field">姓名（可不填）<input id="inName" autocomplete="off" style="width:180px"></label>
+    </div>
+    <div class="err" id="loginErr"></div>
+    <div class="row">
+      <button class="btn primary" id="btnStart">開始學習</button>
+      <button class="btn secondary" id="btnTeacher">教師看板</button>
+    </div>
+    <details id="cfg">
+      <summary>連線設定（老師）</summary>
+      <p class="small-note">填入 Firebase Realtime Database 網址，學生作答就會即時回傳到教師看板。沒填時是本機模式：只有同一台電腦、同一個瀏覽器的看板看得到。</p>
+      <label class="field">資料庫網址<input id="inDb" class="wide" autocomplete="off" placeholder="https://你的專案-default-rtdb.asia-southeast1.firebasedatabase.app"></label>
+      <div class="row" style="margin-top:8px"><button class="btn secondary small" id="btnSaveDb">儲存設定</button><span id="dbMsg" class="small-note"></span></div>
+      <p class="small-note">學生連結（已帶入資料庫與班級代碼）：</p>
+      <div class="copyrow"><code id="stuLink"></code><button class="btn secondary small" id="btnCopy">複製</button></div>
+      <p class="small-note">資料會寫在 <code>fa_cross/班級代碼/students</code>，資料庫規則需允許此路徑讀寫。</p>
+    </details>
+  </div>
+</section>
+
+<!-- 學生 -->
+<section id="student" class="view" hidden>
+  <header class="top panel">
+    <div class="brand">
+      <nav class="modes" id="modes">
+        <button data-mode="example">例題</button>
+        <button data-mode="swap">換順序挑戰</button>
+        <button data-mode="practice">隨機練習</button>
+      </nav>
+    </div>
+    <ol class="chips" id="chips"></ol>
+    <div class="me"><span id="meSeat"></span><button class="link" id="btnLogout">登出</button><span id="meStat"></span><span id="conn" class="conn"></span></div>
+  </header>
+  <main class="board panel">
+    <div class="lines" id="lines"></div>
+    <aside class="draft"><h3>草稿</h3><div id="notes" style="display:flex;flex-direction:column;gap:10px"></div></aside>
+  </main>
+  <footer class="guide panel">
+    <div class="gtext"><div class="instr" id="instr"></div><div class="fb" id="fb" role="status" aria-live="polite"></div></div>
+    <div class="gbtns" id="gbtns"></div>
+  </footer>
+</section>
+
+<!-- 教師 -->
+<section id="teacher" class="view" hidden>
+  <header class="ttop panel">
+    <h2>教師即時看板</h2>
+    <label class="room">班級<input id="tRoom" autocomplete="off"></label>
+    <span id="tConn" class="conn"></span>
+    <span class="sp"></span>
+    <button class="btn secondary small" id="btnDemo">載入範例資料</button>
+    <button class="btn secondary small" id="btnCsv">匯出 CSV</button>
+    <button class="btn secondary small" id="btnClear">清除本班資料</button>
+    <button class="btn secondary small" id="btnBack">返回</button>
+  </header>
+  <div class="kpis" id="kpis"></div>
+  <div class="cards" id="cards"></div>
+</section>
+
+</div></div>
+
+<script>
+/* ================= 設定 ================= */
+const FIREBASE_DB_URL = "";   // 部署時可直接填入；也可在登入頁「連線設定」或網址 ?db= 指定
+const IDLE_MS = 3*60*1000, ACTIVE_MS = 2*60*1000;
+const STEP_NAMES = ['首尾相乘','找兩數','拆中間項','分組提公因式','提出共同括號','乘開檢查','回頭看'];
+const MODE_NAMES = {example:'例題',swap:'換順序挑戰',practice:'隨機練習'};
+const MISC = {
+  M1:'首尾相乘只看常數項', M2:'乘積或和的正負號', M3:'找兩數：和或積不符', M4:'拆項沒用找到的兩數',
+  M5:'提公因式漏變號', M6:'公因式沒提完或提錯', M7:'提出共同括號組合錯', M8:'乘開計算錯誤', M9:'十字斜乘位置錯'
+};
+const $ = s => document.querySelector(s);
+const MINUS = '−';
+function store(k,v){try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null}}
+
+/* ================= 縮放 ================= */
+function fit(){const s=Math.min(innerWidth/1280,innerHeight/720);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`;}
+addEventListener('resize',fit); fit();
+
+/* ================= 數學格式 ================= */
+const num = n => n<0 ? MINUS+Math.abs(n) : String(n);
+const paren = n => n<0 ? '('+num(n)+')' : String(n);
+const X = (sq) => `<i class="v">x</i>${sq?'<sup>2</sup>':''}`;
+function term(coef,deg,first){
+  if(!coef) return '';
+  const ab=Math.abs(coef);
+  const sign = coef<0 ? (first?MINUS:` ${MINUS} `) : (first?'':' + ');
+  const body = deg===0 ? String(ab) : (ab===1?'':ab)+X(deg===2);
+  return sign+body;
+}
+function poly(c2,c1,c0){let o='',f=true;[[c2,2],[c1,1],[c0,0]].forEach(([c,d])=>{if(c){o+=term(c,d,f);f=false;}});return o||'0';}
+const monoText = f => f.d ? (f.k===1?'':f.k===-1?MINUS:num(f.k))+'x' : num(f.k);
+const bin = (u,v) => '('+poly(0,u,v)+')';
+function factorStr(k,d,first){ // 公因式顯示：-1 → "−"、1 → "+"
+  if(d===0 && Math.abs(k)===1) return k<0 ? (first?MINUS:` ${MINUS} `) : (first?'':' + ');
+  return term(k,d,first);
+}
+const plain = s => s.replace(/<sup>2<\/sup>/g,'²').replace(/<[^>]+>/g,'');
+const gcd = (a,b)=>{a=Math.abs(a);b=Math.abs(b);while(b){[a,b]=[b,a%b]}return a};
+
+/* ================= 輸入解析 ================= */
+function norm(s){return String(s||'').replace(/\s+/g,'').replace(/[−–—﹣－]/g,'-').replace(/＋/g,'+').replace(/[Ｘ]/g,'x').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)).toLowerCase();}
+function pInt(s){s=norm(s);return /^[+-]?\d+$/.test(s)?parseInt(s,10):null;}
+function pMono(s){
+  s=norm(s); const m=s.match(/^([+-]?)(\d*)(x?)$/); if(!m||s==='') return null;
+  if(!m[2] && !m[3] && !m[1]) return null;
+  const k=(m[1]==='-'?-1:1)*(m[2]?parseInt(m[2],10):1);
+  if(m[2]&&parseInt(m[2],10)===0) return null;
+  return {k,d:m[3]?1:0};
+}
+
+/* ================= 題目 ================= */
+const EXAMPLE={a:6,b:7,c:-3};
+function rint(lo,hi){return lo+Math.floor(Math.random()*(hi-lo+1));}
+function genProblem(prev){
+  for(let t=0;t<20000;t++){
+    const a=rint(2,20); const ds=[]; for(let p=1;p<=a;p++) if(a%p===0) ds.push(p);
+    const p=ds[rint(0,ds.length-1)], r=a/p;
+    const q=rint(-20,20), s=rint(-20,20); if(!q||!s) continue;
+    if(gcd(p,q)!==1||gcd(r,s)!==1) continue;
+    const b=p*s+q*r, c=q*s;
+    if(!b||Math.abs(b)>20||Math.abs(c)>20) continue;
+    if(prev&&prev.a===a&&prev.b===b&&prev.c===c) continue;
+    return {a,b,c};
+  }
+  return {...EXAMPLE};
+}
+function pairOf(P){ // 相乘 ac、相加 b 的兩整數
+  const ac=P.a*P.c;
+  for(let m=-Math.abs(ac);m<=Math.abs(ac);m++){ if(m===0) continue; if(ac%m===0 && m+ac/m===P.b) return [m,ac/m]; }
+  return null;
+}
+
+/* ================= 狀態 ================= */
+let ME=null;          // {room,seat,name}
+let S=null;           // 目前題目狀態
+let STATS={correct:0,wrong:0,hints:0,solved:0,miscon:{}};
+let hintIdx=0;
+let lastOrder=null;   // 例題中學生寫在後面的數，換順序挑戰用
+
+function newRound(mode,keepProb){
+  const prob = keepProb ? S.prob : (mode==='example' ? {...EXAMPLE} : mode==='practice' ? genProblem(S&&S.prob) : (S?S.prob:{...EXAMPLE}));
+  const pr=pairOf(prob);
+  let forceFirst=null;
+  if(mode==='swap'){ forceFirst = (lastOrder && lastOrder.key===key(prob)) ? lastOrder.second : Math.min(pr[0],pr[1]); }
+  S={mode,prob,step:1,ac:prob.a*prob.c,pair:pr,forceFirst,done:false};
+  hintIdx=0; render(); setFb('',''); post();
+}
+const key = P => P.a+','+P.b+','+P.c;
+
+/* ================= 學生畫面 ================= */
+function blank(id,cls='',ph=''){return `<input class="blank ${cls}" id="${id}" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="${ph}" aria-label="空格">`;}
+function problemHtml(){
+  const {a,b,c}=S.prob, st=S.step;
+  const t2=term(a,2,true), t1=term(b,1,false), t0=term(c,0,false);
+  if(st===1){ // 圈出首項係數與常數項
+    const aStr=a===1?'':String(a);
+    return `<span class="hl">${aStr}</span>${X(true)} ${t1} <span>${c<0?MINUS:'+'}</span> <span class="hl">${Math.abs(c)}</span>`;
+  }
+  if(st===2) return `${t2} <span class="hl">${t1.replace(/^ \+ /,'+ ').replace(/^ − /,MINUS+' ')}</span> ${t0}`;
+  return `${t2}${t1}${t0}`;
+}
+function render(){
+  const {a,b,c}=S.prob, st=S.step;
+  // 上方
+  document.querySelectorAll('#modes button').forEach(bn=>bn.setAttribute('aria-pressed',bn.dataset.mode===S.mode));
+  $('#chips').innerHTML=STEP_NAMES.map((n,i)=>{
+    const k=i+1, label=(k===7 && st<7 && !S.done)?'回頭看':(k===7?(S.done?'十字交乘':'回頭看'):n);
+    const cls = (k<st||S.done)?'done':(k===st?'cur':'');
+    return `<li class="${cls}"><span class="n">${(k<st||S.done)?'✓':k}</span>${label}</li>`;
+  }).join('');
+  $('#meSeat').textContent=ME.seat+' 號'+(ME.name?' '+ME.name:'');
+  $('#meStat').textContent=`對 ${STATS.correct}・錯 ${STATS.wrong}・完成 ${STATS.solved} 題`;
+
+  // 板書
+  let L=`<div class="ln l0"><span class="eq"></span>${problemHtml()}</div>`;
+  if(st>=3){
+    if(st===3) L+=`<div class="ln cur"><span class="eq">=</span>${term(a,2,true)}&nbsp;${blank('t1','','±')}${X()}&nbsp;${blank('t2','','±')}${X()}${term(c,0,false)}</div>`;
+    else{ const [t1,t2]=S.split;
+      L+=`<div class="ln"><span class="eq">=</span><span class="u1">${term(a,2,true)}${term(t1,1,false)}</span>&nbsp;<span class="u2">${term(t2,1,false)}${term(c,0,false)}</span></div>`; }
+  }
+  if(st>=4){
+    if(st===4) L+=`<div class="ln cur"><span class="eq">=</span><span class="grp g1">${blank('f1','mono','')}(${blank('u1','sm')}${X()}&nbsp;${blank('v1','sm')})</span>&nbsp;&nbsp;<span class="grp g2">${blank('f2','mono','')}(${blank('u2','sm')}${X()}&nbsp;${blank('v2','sm')})</span></div>`;
+    else{ const g=S.g;
+      L+=`<div class="ln"><span class="eq">=</span><span class="u1">${factorStr(g.f1.k,g.f1.d,true)}${bin(g.u1,g.v1)}</span><span class="u2">${factorStr(g.f2.k,g.f2.d,false)}${bin(g.u2,g.v2)}</span></div>`; }
+  }
+  if(st>=5){
+    if(st===5) L+=`<div class="ln cur"><span class="eq">=</span>(${blank('A','sm')}${X()}&nbsp;${blank('B','sm')})(${blank('C','sm')}${X()}&nbsp;${blank('D','sm')})</div>`;
+    else{ const [[A,B],[C,D]]=S.ans; L+=`<div class="ln"><span class="eq">=</span>${bin(A,B)}${bin(C,D)}</div>`; }
+  }
+  $('#lines').innerHTML=L; $('#lines').classList.toggle('compact',S.done);
+
+  // 草稿
+  let N='';
+  if(st>=7){ N+=`<div class="note done">首尾相乘 ${num(S.ac)}；拆成 ${num(S.found[0])} 和 ${num(S.found[1])}</div>`+crossHtml(); $('#notes').innerHTML=N; }
+  else{
+  if(st===1) N+=`<div class="note cur"><span class="nl">首尾相乘</span>首項係數 × 常數項 = ${blank('ac','sm')}</div>`;
+  else N+=`<div class="note done">首尾相乘：${a} × ${paren(c)} = ${num(S.ac)}</div>`;
+  if(st===2) N+=`<div class="note cur"><span class="nl">找兩數</span>相乘 = ${num(S.ac)}，相加 = ${num(b)}<div class="nrow">這兩數是 ${blank('p1','sm')} 和 ${blank('p2','sm')}</div></div>`;
+  else if(st>2) N+=`<div class="note done">相乘 ${num(S.ac)}、相加 ${num(b)} → ${num(S.found[0])} 和 ${num(S.found[1])}</div>`;
+  if(st>=6){
+    const [[A,B],[C,D]]=S.ans;
+    if(st===6) N+=`<div class="note cur"><span class="nl">乘開檢查</span>${bin(A,B)}${bin(C,D)} =<div class="nrow">${blank('e2','sm')}${X(true)}&nbsp;${blank('e1','sm')}${X()}&nbsp;${blank('e0','sm')}</div></div>`;
+    else N+=`<div class="note done">乘開檢查：${bin(A,B)}${bin(C,D)} = ${poly(a,b,c)} ✓ 和原式相同</div>`;
+  }
+  $('#notes').innerHTML=N; }
+  if(S.done) $('#lines').insertAdjacentHTML('beforeend',conceptHtml());
+
+  // 引導
+  $('#instr').innerHTML=instrText();
+  renderButtons();
+  const first=document.querySelector('input.blank'); if(first) setTimeout(()=>{const a=document.activeElement;if(!(a&&a.matches&&a.matches('input.blank')))first.focus({preventScroll:true});},30);
+}
+function crossHtml(){
+  const [[A,B],[C,D]]=S.ans;
+  const cell=(x,y,t)=>`<text x="${x}" y="${y}" text-anchor="middle" font-size="30" font-family="Noto Sans TC, sans-serif" font-weight="700" fill="#1F2937">${t}</text>`;
+  const xt=n=>(n===1?'':n===-1?MINUS:num(n))+'x';
+  const svg=`<svg viewBox="0 0 360 150" style="max-width:300px" role="img" aria-label="十字交乘圖">
+    <rect x="0" y="0" width="360" height="150" fill="#FFFFFF"/>
+    ${cell(90,48,xt(A))}${cell(270,48,num(B))}${cell(90,128,xt(C))}${cell(270,128,num(D))}
+    <line x1="130" y1="40" x2="230" y2="112" stroke="#1D4ED8" stroke-width="4"/>
+    <line x1="130" y1="112" x2="230" y2="40" stroke="#C2410C" stroke-width="4"/>
+  </svg>`;
+  let rows;
+  if(!S.done) rows=`<div class="crow"><span style="color:var(--blue);font-weight:700">↘ 左上 × 右下 =</span>${blank('k1','sm')}${X()}</div>
+                    <div class="crow"><span style="color:var(--accent);font-weight:700">↗ 左下 × 右上 =</span>${blank('k2','sm')}${X()}</div>`;
+  else rows=`<div class="crow">↘ ${term(A*D,1,true)}　↗ ${term(C*B,1,true)}　相加 ${term(S.prob.b,1,true)}</div>`;
+  return `<div class="note ${S.done?'':'cur'} cross"><span class="nl">回頭看：上一行是第一個括號，下一行是第二個括號</span>${svg}${rows}</div>`;
+}
+function conceptHtml(){
+  const [[A,B],[C,D]]=S.ans;
+  return `<div class="concept" style="font-size:19px;margin-top:6px">斜乘得到 <b>${term(A*D,1,true)}</b> 和 <b>${term(C*B,1,true)}</b>，正是第 3 步拆出來的兩項！相加就是 ${term(S.prob.b,1,true)}。<br>四個數全部相乘 ${num(A)}×${paren(D)}×${paren(C)}×${paren(B)} = ${num(S.ac)}，也就是首尾相乘。<br>這種「斜著乘、再相加」找中間項的方法，叫做 <b>十字交乘法</b>；拆項分組就是它背後的道理。</div>`;
+}
+function instrText(){
+  const {b}=S.prob, st=S.step;
+  if(S.done) return `<span class="step">完成！</span>你用「首尾相乘 → 拆中間項 → 分組提公因式」完成了因式分解。`;
+  const T={
+    1:'首尾相乘：把圈起來的首項係數和常數項相乘，正負號一起算，填在右邊草稿。',
+    2:`找兩數：找兩個整數，相乘是 ${num(S.ac)}、相加是一次項係數 ${num(b)}。`,
+    3:`拆中間項：用這兩個數把 ${term(b,1,true)} 拆成兩項，正負號一起填。`+(S.forceFirst!==null&&S.mode==='swap'?`<br>這次挑戰把 <b>${term(S.forceFirst,1,true)}</b> 寫在前面。`:''),
+    4:'分組提公因式：<span style="color:var(--g1)">藍線</span>兩項一組、<span style="color:var(--g2)">橘線</span>兩項一組，各自提出公因式。公因式可填 3x、2、−1 或只填「−」。',
+    5:'提出共同括號：兩組有一樣的括號，把它提出來，剩下的合成另一個括號。',
+    6:'乘開檢查：把你的答案乘開，看看會不會回到原式。',
+    7:'回頭看：兩個括號的係數排成上下兩行，斜著相乘。'
+  };
+  return `<span class="step">第 ${st} 步・</span>${T[st]}`;
+}
+function renderButtons(){
+  const g=$('#gbtns');
+  if(S.done){
+    g.innerHTML=`<button class="btn secondary" data-go="swap">換順序挑戰</button><button class="btn primary" data-go="practice">下一題</button>`;
+  }else{
+    g.innerHTML=`<button class="btn secondary" id="btnHint">提示</button><button class="btn primary" id="btnCheck">檢查</button>`;
+  }
+}
+function setFb(kind,html){const f=$('#fb');f.className='fb '+(kind||'');f.innerHTML=html||'';}
+const OK='✓ ', NG='✗ ';
+
+/* ================= 檢查 ================= */
+function val(id){const el=document.getElementById(id);return el?el.value:'';}
+function markBad(ids){document.querySelectorAll('input.blank').forEach(i=>i.classList.toggle('bad',ids.includes(i.id)));}
+function need(ids){ // 是否都填了
+  const miss=ids.filter(id=>norm(val(id))==='');
+  if(miss.length){markBad(miss);setFb('info','還有空格沒填喔。');return false;}
+  return true;
+}
+function check(){
+  const st=S.step, {a,b,c}=S.prob, ac=S.ac; let r;
+  if(st===1){
+    if(!need(['ac'])) return; const v=pInt(val('ac')); if(v===null) return fmtErr(['ac']);
+    if(v===ac) r={ok:1,msg:`首尾相乘是 ${num(ac)}。`};
+    else if(v===c) r={misc:'M1',bad:['ac'],msg:`${num(c)} 只是常數項。「首尾相乘」要用哪兩個數相乘呢？首項的係數有沒有乘進去？`};
+    else if(v===-ac) r={misc:'M2',bad:['ac'],msg:`數字對了，正負號再想想：${num(a)} 和 ${num(c)} 的正負號相同還是不同？相乘後是正還是負？`};
+    else if(v===a) r={misc:'M1',bad:['ac'],msg:`${a} 是首項係數，還要乘上誰？`};
+    else r={misc:'M1',bad:['ac'],msg:`再算一次：首項係數 × 常數項，連正負號一起看，結果是多少？`};
+  }
+  else if(st===2){
+    if(!need(['p1','p2'])) return; const u=pInt(val('p1')), w=pInt(val('p2')); if(u===null||w===null) return fmtErr(['p1','p2']);
+    if(u*w===ac && u+w===b){ S.found=[u,w]; r={ok:1,msg:`${num(u)} × ${paren(w)} = ${num(ac)}，${num(u)} + ${paren(w)} = ${num(b)}，找到了！`}; }
+    else if(u*w===c && u+w===b) r={misc:'M1',bad:['p1','p2'],msg:`這兩數相乘是 ${num(c)}，那是常數項。第 1 步首尾相乘算出的是多少？應該用哪個數？`};
+    else if(u*w===ac && u+w===-b) r={misc:'M2',bad:['p1','p2'],msg:`相乘對了！但相加是 ${num(u+w)}，題目要 ${num(b)}。想一想：哪兩個數相乘還是 ${num(ac)}，加起來卻是 ${num(b)}？`};
+    else if(u*w===ac) r={misc:'M3',bad:['p1','p2'],msg:`相乘是 ${num(ac)} 沒錯，但相加是 ${num(u+w)}，不是 ${num(b)}。還有哪些相乘是 ${num(ac)} 的組合？`};
+    else if(u*w===-ac) r={misc:'M2',bad:['p1','p2'],msg:`相乘得到 ${num(u*w)}，正負號和 ${num(ac)} 不同。兩數應該同號還是異號？`};
+    else if(u+w===b) r={misc:'M3',bad:['p1','p2'],msg:`相加是 ${num(b)} 沒錯，但相乘是 ${num(u*w)}，不是 ${num(ac)}。再找找看。`};
+    else r={misc:'M3',bad:['p1','p2'],msg:`這兩數相乘是 ${num(u*w)}、相加是 ${num(u+w)}。要相乘 ${num(ac)}、相加 ${num(b)}，再試試別的組合。`};
+  }
+  else if(st===3){
+    if(!need(['t1','t2'])) return; const t1=pInt(val('t1')), t2=pInt(val('t2')); if(t1===null||t2===null) return fmtErr(['t1','t2']);
+    const [m,n]=S.found; const same=(t1===m&&t2===n)||(t1===n&&t2===m);
+    if(same && S.mode==='swap' && S.forceFirst!==null && t1!==S.forceFirst){ setFb('info',`拆得沒錯！這次挑戰把 ${term(S.forceFirst,1,true)} 寫在前面，調換一下順序。`); return; }
+    if(same){ S.split=[t1,t2]; r={ok:1,msg:`${term(b,1,true)} 拆成 ${term(t1,1,true)} 和 ${term(t2,1,true)}，加回去還是 ${term(b,1,true)}。`}; }
+    else if(t1+t2===b) r={misc:'M4',bad:['t1','t2'],msg:`加起來是 ${term(b,1,true)} 沒錯，但要用第 2 步找到的兩個數，為什麼一定要用它們？`};
+    else r={misc:'M4',bad:['t1','t2'],msg:`拆開的兩項加起來要等於原本的 ${term(b,1,true)}。第 2 步找到的是哪兩個數？`};
+  }
+  else if(st===4){
+    const ids=['f1','u1','v1','f2','u2','v2']; if(!need(ids)) return;
+    const f1=pMono(val('f1')), f2=pMono(val('f2')); const u1=pInt(val('u1')),v1=pInt(val('v1')),u2=pInt(val('u2')),v2=pInt(val('v2'));
+    const fmtBad=[]; if(!f1)fmtBad.push('f1'); if(!f2)fmtBad.push('f2'); [['u1',u1],['v1',v1],['u2',u2],['v2',v2]].forEach(([i,v])=>{if(v===null)fmtBad.push(i)});
+    if(fmtBad.length) return fmtErr(fmtBad,'公因式可以填 3x、−x、2、−1，或只填「−」；括號內填有正負號的整數。');
+    const [t1,t2]=S.split;
+    const g1ok=f1.d===1&&f1.k*u1===a&&f1.k*v1===t1, g2ok=f2.d===0&&f2.k*u2===t2&&f2.k*v2===c;
+    const f1s=monoText(f1), f2s=monoText(f2);
+    const g1html=poly(a,t1,0), g2html=poly(0,t2,c);
+    if(!g1ok){
+      if(f1.d===0) r={misc:'M6',bad:['f1'],msg:`前兩項 ${g1html} 都有 ${X()}，${X()} 也能一起提出來嗎？`};
+      else if(f1.k*u1===a&&f1.k*v1===-t1) r={misc:'M5',bad:['v1'],msg:`把 ${f1s} 乘回括號裡的 ${num(v1)}，會得到原本的 ${term(t1,1,true)} 嗎？正負號再看一次。`};
+      else r={misc:'M6',bad:['f1','u1','v1'],msg:`把 ${f1s} 乘回括號裡，會得到原本的 ${g1html} 嗎？`};
+    }else if(!g2ok){
+      if(f2.d===1) r={misc:'M6',bad:['f2'],msg:`後兩項 ${g2html} 裡的 ${num(c)} 沒有 ${X()}，${X()} 能提出來嗎？`};
+      else if(f2.k*u2===t2&&f2.k*v2===-c) r={misc:'M5',bad:['v2'],msg:`把 ${f2s} 乘回括號裡的 ${num(v2)}，會得到原本的 ${num(c)} 嗎？提出負號時，括號裡每一項都要變號嗎？`};
+      else r={misc:'M6',bad:['f2','u2','v2'],msg:`把 ${f2s} 乘回括號裡，會得到原本的 ${g2html} 嗎？`};
+    }else if(u1!==u2||v1!==v2){
+      r={misc:'M6',bad:['f1','f2'],msg:`兩組都算對了！不過兩個括號 ${bin(u1,v1)} 和 ${bin(u2,v2)} 一樣嗎？要提出共同括號，兩組括號要長得一樣。公因式提完了嗎？要不要提出負號？`};
+    }else{ S.g={f1,u1,v1,f2,u2,v2}; r={ok:1,msg:`兩組都出現 ${bin(u1,v1)}，可以把它提出來了！`}; }
+  }
+  else if(st===5){
+    const ids=['A','B','C','D']; if(!need(ids)) return; const [A,B,C,D]=ids.map(i=>pInt(val(i)));
+    if([A,B,C,D].some(v=>v===null)) return fmtErr(ids);
+    const g=S.g;
+    if(A&&C&&A*C===a&&A*D+B*C===b&&B*D===c){ S.ans=[[A,B],[C,D]]; r={ok:1,msg:`${plain(poly(a,b,c))} = ${plain(bin(A,B)+bin(C,D))}`}; }
+    else{
+      const hasCommon=(A===g.u1&&B===g.v1)||(C===g.u1&&D===g.v1);
+      if(hasCommon) r={misc:'M7',bad:(A===g.u1&&B===g.v1)?['C','D']:['A','B'],msg:`共同括號寫對了！提出它之後，兩組前面各剩下什麼？把剩下的合起來，寫成另一個括號。`};
+      else r={misc:'M7',bad:ids,msg:`兩組共同的括號是哪一個？先把它整個寫進其中一個括號。`};
+    }
+  }
+  else if(st===6){
+    const ids=['e2','e1','e0']; if(!need(ids)) return; const [e2,e1,e0]=ids.map(i=>pInt(val(i)));
+    if([e2,e1,e0].some(v=>v===null)) return fmtErr(ids);
+    const [[A,B],[C,D]]=S.ans;
+    if(e2===A*C&&e1===A*D+B*C&&e0===B*D) r={ok:1,msg:'乘開後就是原式，因式分解正確！'};
+    else{
+      const bad=[]; if(e2!==A*C)bad.push('e2'); if(e1!==A*D+B*C)bad.push('e1'); if(e0!==B*D)bad.push('e0');
+      let msg;
+      if(bad.includes('e1')&&bad.length===1) msg=`${X()} 項有兩個來源：外 × 外、內 × 內，兩個都算進去了嗎？正負號呢？`;
+      else if(bad.includes('e2')) msg=`${X(true)} 項是哪兩項相乘來的？`;
+      else msg=`常數項是哪兩個數相乘來的？正負號對嗎？`;
+      r={misc:'M8',bad,msg};
+    }
+  }
+  else if(st===7){
+    const ids=['k1','k2']; if(!need(ids)) return; const k1=pInt(val('k1')),k2=pInt(val('k2'));
+    if(k1===null||k2===null) return fmtErr(ids);
+    const [[A,B],[C,D]]=S.ans;
+    if(k1===A*D&&k2===C*B) r={ok:1,msg:'和第 3 步拆出的兩項比比看！'};
+    else if(k1===A*B||k2===C*D||k1===C*B) r={misc:'M9',bad:ids,msg:'要斜著乘喔：左上乘右下、左下乘右上。'};
+    else r={misc:'M9',bad:ids,msg:'再算一次斜線兩端的數相乘，正負號一起看。'};
+  }
+  finish(r);
+}
+function fmtErr(ids,msg){markBad(ids);setFb('info',msg||'請填整數，例如 9 或 −2（負號可用鍵盤的 -）。');}
+function finish(r){
+  if(r.ok){
+    STATS.correct++; setFb('ok',OK+r.msg);
+    if(S.step===3 && S.mode!=='swap') lastOrder={key:key(S.prob),second:S.split[1]};
+    if(S.step===7){ S.done=true; STATS.solved++; }
+    else S.step++;
+    hintIdx=0;
+    const msg=r.msg; render(); setFb('ok',OK+msg);
+  }else{
+    STATS.wrong++; STATS.miscon[r.misc]=(STATS.miscon[r.misc]||0)+1;
+    markBad(r.bad||[]); setFb('bad',NG+r.msg);
+    $('#meStat').textContent=`對 ${STATS.correct}・錯 ${STATS.wrong}・完成 ${STATS.solved} 題`;
+  }
+  post();
+}
+function hint(){
+  const {a,b,c}=S.prob, ac=S.ac, st=S.step;
+  const H={
+    1:['首項係數是 x² 前面的數，常數項是最後沒有 x 的數，兩個都要帶著正負號。',`算算看：${a} × ${paren(c)}。`],
+    2:[`先列出相乘是 ${num(ac)} 的整數組合（例如 1 和 ${num(ac)}），再一組一組算相加。`,
+       ac<0?'相乘是負數，表示兩數一正一負；相加的正負號，由絕對值大的那個數決定。':'相乘是正數，表示兩數同號；相加是正就都正，相加是負就都負。'],
+    3:[`把 ${plain(term(b,1,true))} 寫成兩項相加，係數就用第 2 步那兩個數。`],
+    4:['前兩項：係數的最大公因數和 x 都提出來。','後兩項：要讓括號和前一組一樣，提出來的數可能要帶負號。'],
+    5:['兩組都乘著同一個括號，就像 3 個蘋果 − 1 個蘋果：把「蘋果」提出來。'],
+    6:['用分配律：第一個括號的每一項，都乘上第二個括號的每一項，再合併同類項。'],
+    7:['左上的數乘右下的數；左下的數乘右上的數。']
+  }[st]||[];
+  if(!H.length) return;
+  const i=Math.min(hintIdx,H.length-1); STATS.hints++; hintIdx++;
+  setFb('hint',`提示 ${i+1}／${H.length}：${H[i]}`); post();
+}
+
+/* ================= 資料回傳 ================= */
+function dbUrl(){const q=new URLSearchParams(location.search).get('db');return (q||store('facross_db')||FIREBASE_DB_URL||'').replace(/\/+$/,'');}
+const LKEY = room => 'facross_room_'+room;
+let bc=null; try{bc=new BroadcastChannel('facross');}catch(e){}
+function record(){
+  return {seat:ME.seat,name:ME.name||'',mode:S.mode,prob:plain(poly(S.prob.a,S.prob.b,S.prob.c)),step:S.step,done:S.done,
+    correct:STATS.correct,wrong:STATS.wrong,hints:STATS.hints,solved:STATS.solved,miscon:STATS.miscon,last:Date.now()};
+}
+let postTimer=null;
+function post(){clearTimeout(postTimer);postTimer=setTimeout(doPost,300);}
+async function doPost(){
+  if(!ME) return; const rec=record(), db=dbUrl(), conn=$('#conn');
+  if(!db){
+    try{const o=JSON.parse(store(LKEY(ME.room))||'{}');o[ME.seat]=rec;store(LKEY(ME.room),JSON.stringify(o));}catch(e){}
+    try{bc&&bc.postMessage({room:ME.room});}catch(e){}
+    conn.className='conn'; conn.textContent='本機模式'; return;
+  }
+  try{
+    const res=await fetch(`${db}/fa_cross/${encodeURIComponent(ME.room)}/students/${encodeURIComponent(ME.seat)}.json`,{method:'PUT',body:JSON.stringify(rec)});
+    if(!res.ok) throw new Error(res.status);
+    conn.className='conn ok'; conn.textContent='已連線';
+  }catch(e){ conn.className='conn bad'; conn.textContent='回傳失敗，下次作答會再試'; }
+}
+
+/* ================= 教師看板 ================= */
+let tTimer=null, demoMode=false, lastList=[], clearArm=false;
+async function loadClass(){
+  const room=$('#tRoom').value.trim()||'801', db=dbUrl(), conn=$('#tConn');
+  let obj={};
+  if(demoMode){ obj=demoData(); conn.className='conn'; conn.textContent='範例資料'; }
+  else if(!db){ try{obj=JSON.parse(store(LKEY(room))||'{}');}catch(e){} conn.className='conn'; conn.textContent='本機模式'; }
+  else{
+    try{const res=await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`);if(!res.ok)throw 0;obj=(await res.json())||{};conn.className='conn ok';conn.textContent='已連線・每 3 秒更新';}
+    catch(e){conn.className='conn bad';conn.textContent='讀取失敗，請檢查資料庫網址';obj=null;}
+  }
+  if(obj===null) return;
+  lastList=Object.values(obj).filter(Boolean).sort((x,y)=>(+x.seat)-(+y.seat));
+  renderTeacher(lastList);
+}
+function topMis(m){let best=null,n=0;for(const k in (m||{})){if(m[k]>n){n=m[k];best=k;}}return best?{k:best,n}:null;}
+function ago(t){const s=Math.max(0,Math.round((Date.now()-t)/1000));if(s<60)return s+' 秒前';if(s<3600)return Math.floor(s/60)+' 分鐘前';return Math.floor(s/3600)+' 小時前';}
+function renderTeacher(list){
+  const now=Date.now();
+  const active=list.filter(s=>now-s.last<ACTIVE_MS).length;
+  const C=list.reduce((t,s)=>t+s.correct,0), W=list.reduce((t,s)=>t+s.wrong,0);
+  const rate=C+W?Math.round(C/(C+W)*100):null;
+  const avgSolved=list.length?(list.reduce((t,s)=>t+s.solved,0)/list.length):0;
+  const avgStep=list.length?(list.reduce((t,s)=>t+(s.done?7:s.step-1),0)/list.length):0;
+  const agg={}; list.forEach(s=>{for(const k in (s.miscon||{})) agg[k]=(agg[k]||0)+s.miscon[k];});
+  const tm=topMis(agg);
+  $('#kpis').innerHTML=`
+    <div class="kpi panel"><span class="k">作答中／登入</span><span class="v">${active} / ${list.length}</span><span class="s">2 分鐘內有動作算作答中</span></div>
+    <div class="kpi panel"><span class="k">全班答對率</span><span class="v">${rate===null?'—':rate+'%'}</span><span class="s">答對 ${C}・答錯 ${W}</span></div>
+    <div class="kpi panel"><span class="k">平均進度</span><span class="v">${avgSolved.toFixed(1)} 題</span><span class="s">目前這題平均完成 ${avgStep.toFixed(1)} / 7 步</span></div>
+    <div class="kpi panel"><span class="k">最常見迷思</span><span class="v txt">${tm?MISC[tm.k]:'尚無'}</span><span class="s">${tm?'全班共 '+tm.n+' 次':'&nbsp;'}</span></div>`;
+  if(!list.length){$('#cards').innerHTML=`<div class="empty">還沒有學生登入班級「${esc($('#tRoom').value||'801')}」。學生登入並開始作答後，這裡會出現每位學生的圖卡。</div>`;return;}
+  $('#cards').innerHTML=list.map(s=>{
+    const tot=s.correct+s.wrong, r=tot?Math.round(s.correct/tot*100):null;
+    const alert=s.wrong>=3&&r!==null&&r<60, idle=now-s.last>IDLE_MS;
+    const m=topMis(s.miscon), stepN=s.done?7:s.step-1;
+    const pos=s.done?`${MODE_NAMES[s.mode]||''}・本題完成`:`${MODE_NAMES[s.mode]||''}・第 ${s.step} 步 ${STEP_NAMES[s.step-1]||''}`;
+    const flag=alert?'<span class="flag">需關注</span>':idle?'<span class="flag">久未作答</span>':'';
+    return `<div class="card ${alert?'alert':''} ${idle&&!alert?'idle':''} ${s.demo?'demo':''}">
+      <div class="h"><span class="seat">${esc(s.seat)}</span><span class="nm">${esc(s.name||'')}</span><span class="rate">${r===null?'—':r+'%'}</span></div>
+      <div class="pos">${pos}</div>
+      <div class="bar" aria-label="本題進度 ${stepN}/7"><i style="width:${stepN/7*100}%"></i></div>
+      <div class="cnt"><span>對 ${s.correct}</span><span>錯 ${s.wrong}</span><span>提示 ${s.hints}</span><span>完成 ${s.solved} 題</span></div>
+      <div class="mis">${m?'迷思：'+MISC[m.k]+'（'+m.n+'）':'迷思：無'}</div>
+      <div class="h" style="justify-content:space-between"><span>${ago(s.last)}</span>${flag}</div>
+    </div>`;}).join('');
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+let DEMO=null;
+function demoData(){
+  if(DEMO) return DEMO;
+  const o={}, keys=Object.keys(MISC), now=Date.now();
+  for(let i=1;i<=28;i++){
+    const c=rint(3,20), w=rint(0,9), mis={}; for(let j=0;j<rint(0,3);j++){const k=keys[rint(0,4)];mis[k]=(mis[k]||0)+rint(1,3);}
+    const done=Math.random()<.2;
+    o[i]={seat:String(i),name:'',demo:true,mode:['example','swap','practice'][rint(0,2)],step:done?7:rint(1,7),done,correct:c,wrong:w,hints:rint(0,6),solved:rint(0,4),miscon:mis,last:now-(Math.random()<.12?rint(4,10)*60000:rint(5,100)*1000)};
+  }
+  return DEMO=o;
+}
+async function exportCsv(){
+  const head=['座號','姓名','模式','題目','目前步驟','本題完成','完成題數','答對','答錯','答對率','提示','最常見迷思','最後活動'];
+  const rows=lastList.map(s=>{const t=s.correct+s.wrong,m=topMis(s.miscon);
+    return [s.seat,s.name||'',MODE_NAMES[s.mode]||'',s.prob||'',s.step,s.done?'是':'否',s.solved,s.correct,s.wrong,t?Math.round(s.correct/t*100)+'%':'',s.hints,m?MISC[m.k]:'',new Date(s.last).toLocaleString('zh-TW')];});
+  const csv='﻿'+[head,...rows].map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const fname=`首尾相乘拆項_${$('#tRoom').value||'801'}.csv`;
+  try{ const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
+    if(dl){ await dl.save({filename:fname,data:new Blob([csv],{type:'text/csv'})}); return; } }catch(e){}
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+}
+async function clearClass(){
+  const btn=$('#btnClear');
+  if(!clearArm){clearArm=true;btn.textContent='再按一次確認清除';btn.style.borderColor='var(--bad)';btn.style.color='var(--bad)';setTimeout(()=>{clearArm=false;btn.textContent='清除本班資料';btn.style.cssText='';},4000);return;}
+  clearArm=false;btn.textContent='清除本班資料';btn.style.cssText='';
+  const room=$('#tRoom').value.trim()||'801', db=dbUrl();
+  if(demoMode){demoMode=false;DEMO=null;$('#btnDemo').textContent='載入範例資料';}
+  else if(!db) store(LKEY(room),'{}');
+  else{ try{await fetch(`${db}/fa_cross/${encodeURIComponent(room)}/students.json`,{method:'DELETE'});}catch(e){} }
+  loadClass();
+}
+
+/* ================= 畫面切換 ================= */
+function show(id){['login','student','teacher'].forEach(v=>$('#'+v).hidden=v!==id);}
+function stuLink(){
+  const u=new URL(location.href); u.search=''; const db=dbUrl(); const p=new URLSearchParams();
+  if(db)p.set('db',db); p.set('room',$('#inRoom').value.trim()||'801'); u.search=p.toString(); return u.toString();
+}
+function refreshCfg(){ $('#inDb').value=dbUrl(); $('#stuLink').textContent=stuLink(); }
+
+(function init(){
+  const q=new URLSearchParams(location.search); if(q.get('room')) $('#inRoom').value=q.get('room');
+  refreshCfg();
+  $('#inRoom').addEventListener('input',refreshCfg);
+  $('#btnSaveDb').onclick=()=>{const v=$('#inDb').value.trim();store('facross_db',v);$('#dbMsg').textContent=v?'已儲存（此瀏覽器）':'已清除，改用本機模式';refreshCfg();};
+  $('#btnCopy').onclick=async()=>{const t=$('#stuLink').textContent;try{await navigator.clipboard.writeText(t);$('#btnCopy').textContent='已複製';}catch(e){const r=document.createRange();r.selectNodeContents($('#stuLink'));const s=getSelection();s.removeAllRanges();s.addRange(r);$('#btnCopy').textContent='已選取，請按複製';}setTimeout(()=>$('#btnCopy').textContent='複製',2000);};
+  $('#btnStart').onclick=()=>{
+    const seat=norm($('#inSeat').value), room=$('#inRoom').value.trim();
+    if(!room){$('#loginErr').textContent='請填班級代碼。';return;}
+    if(!/^\d{1,3}$/.test(seat)||+seat<1){$('#loginErr').textContent='請填座號（數字）。';return;}
+    $('#loginErr').textContent='';
+    ME={room,seat:String(+seat),name:$('#inName').value.trim().slice(0,12)};
+    STATS={correct:0,wrong:0,hints:0,solved:0,miscon:{}};
+    try{const old=JSON.parse(store('facross_me_'+room+'_'+ME.seat)||'null');if(old)STATS=old;}catch(e){}
+    show('student'); newRound('example');
+  };
+  $('#inSeat').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btnStart').click();});
+  $('#btnTeacher').onclick=()=>{$('#tRoom').value=$('#inRoom').value.trim()||'801';show('teacher');loadClass();clearInterval(tTimer);tTimer=setInterval(loadClass,3000);};
+  $('#btnBack').onclick=()=>{clearInterval(tTimer);show('login');};
+  $('#tRoom').addEventListener('change',loadClass);
+  $('#btnDemo').onclick=()=>{demoMode=!demoMode;if(!demoMode)DEMO=null;$('#btnDemo').textContent=demoMode?'關閉範例資料':'載入範例資料';loadClass();};
+  $('#btnCsv').onclick=exportCsv;
+  $('#btnClear').onclick=clearClass;
+  $('#btnLogout').onclick=()=>{ME=null;show('login');};
+  $('#modes').addEventListener('click',e=>{const b=e.target.closest('button');if(b)newRound(b.dataset.mode);});
+  $('#gbtns').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.id==='btnCheck')check(); else if(b.id==='btnHint')hint(); else if(b.dataset.go) newRound(b.dataset.go, b.dataset.go==='swap');});
+  $('#student').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('input.blank')){e.preventDefault();if(!S.done)check();}});
+  $('#student').addEventListener('input',e=>{if(e.target.matches('input.blank'))e.target.classList.remove('bad');});
+  if(bc) bc.onmessage=()=>{ if(!$('#teacher').hidden) loadClass(); };
+  // 保存個人累計（同一台平板重新整理不歸零）
+  setInterval(()=>{if(ME)store('facross_me_'+ME.room+'_'+ME.seat,JSON.stringify(STATS));},2000);
+})();
+</script>
+
+</body>
+</html>
