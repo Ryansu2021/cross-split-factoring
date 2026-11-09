@@ -188,6 +188,11 @@ input.blank.bad{border-color:var(--bad);background:var(--bad-bg)}
 .witem .wq{font-size:20px}
 .witem .wa{font-size:22px;color:var(--bad);font-weight:700}
 .witem .wtag{font-size:13px;color:var(--ink2)}
+.wproc{display:flex;flex-direction:column;gap:2px;border:1px solid var(--frame);border-radius:6px;padding:8px 10px;background:var(--paper);font-size:17px}
+.wproc .pl{color:var(--ink2)}
+.wproc .pw{color:var(--bad);font-weight:700}
+.wproc .pw::before{content:"✗ "}
+.wfb{font-size:13px;color:#7C2D12;background:var(--hint-bg);border-radius:6px;padding:4px 8px}
 .witem img{width:100%;border:1px solid var(--frame);border-radius:6px;cursor:zoom-in;background:#fff}
 .witem.big{grid-column:1/-1}
 .witem.big img{cursor:zoom-out}
@@ -589,7 +594,10 @@ function finish(r){
     const msg=r.msg; render(); setFb('ok',OK+msg);
   }else{
     STATS.wrong++; STATS.miscon[r.misc]=(STATS.miscon[r.misc]||0)+1;
+    const proc=boardProcess();
     markBad(r.bad||[]); setFb('bad',NG+r.msg);
+    STATS.wrongN=(STATS.wrongN||0)+1;
+    saveWrong({mode:S.mode,st:S.step,prob:plain(poly(S.prob.a,S.prob.b,S.prob.c)),ans:proc.wrong,lines:proc.lines,fb:plain(r.msg).slice(0,200),k:r.misc,t:Date.now()});
     $('#meStat').textContent=`對 ${STATS.correct}・錯 ${STATS.wrong}・完成 ${STATS.solved} 題`;
   }
   post();
@@ -667,7 +675,7 @@ function checkChallenge(){
     else {k='C2';msg=`兩個括號的常數相乘，會等於常數項 ${num(c)} 嗎？`;}
     STATS.miscon[k]=(STATS.miscon[k]||0)+1; markBad(ids); setFb('bad',NG+msg);
     STATS.wrongN=(STATS.wrongN||0)+1;
-    saveWrong({i:CH.idx+1,prob:plain(poly(a,b,c)),ans:plain(bin(A,B)+bin(C,D)),k,img:padSnapshot(),t:Date.now()});
+    saveWrong({mode:'challenge',i:CH.idx+1,prob:plain(poly(a,b,c)),ans:plain(bin(A,B)+bin(C,D)),k,img:padSnapshot(),t:Date.now()});
   }
   $('#meStat').textContent=`對 ${STATS.correct}・錯 ${STATS.wrong}・完成 ${STATS.solved} 題`;
   post();
@@ -711,6 +719,24 @@ function padMount(){
     if(PAD.tool==='eraser'){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=40;}else{ctx.globalCompositeOperation='source-over';ctx.strokeStyle=ctx.fillStyle=PAD.color;ctx.lineWidth=5;}}
   function line(p,q){PAD.dirty=true;const ctx=cv.getContext('2d');setup(ctx);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();}
   function dot(p){PAD.dirty=true;const ctx=cv.getContext('2d');setup(ctx);ctx.beginPath();ctx.arc(p[0],p[1],ctx.lineWidth/2,0,Math.PI*2);ctx.fill();}
+}
+// 把板書與草稿轉成文字過程：已完成的各行＋這一步學生填錯的那一行（空格以 □ 表示）
+function boardProcess(){
+  const txt=el=>{ const c=el.cloneNode(true); c.querySelectorAll('.nl,svg,.concept').forEach(x=>x.remove());
+    c.querySelectorAll('input').forEach(i=>{ const src=el.querySelector('#'+i.id); i.replaceWith(document.createTextNode('\u0001'+(src&&src.value.trim()?src.value.trim():'□')+'\u0002')); });
+    c.querySelectorAll('sup').forEach(x=>x.textContent='²'); c.querySelectorAll('.nrow').forEach(x=>x.prepend(document.createTextNode(' ')));
+    let t=c.textContent.replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+    // 學生填的數：接在項後面的正數補上「+」，負號改成「−」
+    t=t.replace(/\u0001([^\u0002]*)\u0002/g,(m,v,off,all)=>{ v=v.replace(/^[-－−]/,'−').replace(/^\+\s*/,'+');
+      const prev=all.slice(0,off).replace(/[\u0001\u0002]/g,'').trimEnd().slice(-1);
+      if(/^[0-9x]/i.test(v)&&/[0-9x²)]/.test(prev)) v='+ '+v; else if(/^[−+]\S/.test(v)&&/[0-9x²)]/.test(prev)) v=v[0]+' '+v.slice(1);
+      return ' '+v+' '; });
+    return t.replace(/\s+/g,' ').replace(/(\d|□) (x)/g,'$1$2').replace(/(x) \(/g,'$1(').replace(/\( /g,'(').replace(/ \)/g,')').replace(/= ?/g,'= ').trim(); };
+  const lines=[...document.querySelectorAll('#lines .ln:not(.cur)')].map(txt).filter(Boolean).slice(0,8);
+  const cur=document.querySelector('#lines .ln.cur')||document.querySelector('#notes .note.cur');
+  let wrong=cur?txt(cur):'';
+  if(cur&&cur.classList.contains('cross')) wrong='斜乘：'+[...cur.querySelectorAll('.crow')].map(txt).join('；');
+  return {lines,wrong:wrong.slice(0,300)};
 }
 function padClear(){const cv=$('#pad'); PAD.dirty=false; if(cv) cv.getContext('2d').clearRect(0,0,cv.width,cv.height);}
 // 畫板有寫東西才截圖（白底＋淡格線，縮成寬 640 的 JPEG）；沒寫回傳 null
@@ -803,7 +829,7 @@ async function loadClass(){
 }
 async function showWrongs(seat){
   const room=$('#tRoom').value.trim()||'801', db=dbUrl();
-  $('#wTitle').textContent=`${seat} 號・真實挑戰錯題`; $('#wList').innerHTML='<div class="wnone">讀取中…</div>'; $('#wModal').hidden=false;
+  $('#wTitle').textContent=`${seat} 號・錯題紀錄`; $('#wList').innerHTML='<div class="wnone">讀取中…</div>'; $('#wModal').hidden=false;
   let items=[];
   try{
     if(!db){ const o=JSON.parse(store(WKEY(room))||'{}'); items=o[seat]||[]; }
@@ -812,11 +838,21 @@ async function showWrongs(seat){
   }catch(e){ $('#wList').innerHTML='<div class="wnone">讀取失敗，請稍後再試。</div>'; return; }
   items.sort((x,y)=>y.t-x.t);
   if(!items.length){ $('#wList').innerHTML='<div class="wnone">沒有錯題紀錄。</div>'; return; }
-  $('#wList').innerHTML=items.map(w=>`<div class="witem">
-    <div class="wh"><span>第 ${esc(w.i)} 題</span><span>${new Date(w.t).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}</span></div>
+  const tm=t=>new Date(t).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  $('#wList').innerHTML=items.map(w=>{
+    if(w.st){ // 例題／換順序／隨機練習：顯示解題過程與填錯的那一步
+      const lines=Array.isArray(w.lines)?w.lines:[];
+      return `<div class="witem">
+      <div class="wh"><span>${esc(MODE_NAMES[w.mode]||'')}・第 ${esc(w.st)} 步 ${esc(STEP_NAMES[w.st-1]||'')}</span><span>${tm(w.t)}</span></div>
+      <div class="wq">${esc(w.prob)}</div>
+      <div class="wproc">${lines.map(l=>`<div class="pl">${esc(l)}</div>`).join('')}<div class="pw">${esc(w.ans||'')}</div></div>
+      ${w.fb?`<div class="wfb">當時的回饋：${esc(w.fb)}</div>`:''}
+      <div class="wtag">${esc(MISC[w.k]||'')}</div></div>`; }
+    return `<div class="witem">
+    <div class="wh"><span>真實挑戰・第 ${esc(w.i)} 題</span><span>${tm(w.t)}</span></div>
     <div class="wq">${esc(w.prob)} =</div><div class="wa">${esc(w.ans)}</div>
     ${w.img&&/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(w.img)?`<img src="${w.img}" alt="${esc(w.prob)} 的草稿">`:'<div class="wtag">畫板沒有寫過程，以上為學生輸入的錯誤式子</div>'}
-    <div class="wtag">${esc(MISC[w.k]||'')}</div></div>`).join('');
+    <div class="wtag">${esc(MISC[w.k]||'')}</div></div>`; }).join('');
 }
 function frac(s){ if(s.mode==='challenge'&&s.chTotal) return s.done?1:(s.step-1)/s.chTotal; return (s.done?7:s.step-1)/7; }
 function topMis(m){let best=null,n=0;for(const k in (m||{})){if(m[k]>n){n=m[k];best=k;}}return best?{k:best,n}:null;}
